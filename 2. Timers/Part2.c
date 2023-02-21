@@ -19,6 +19,7 @@ void main(){
     gpioInit();
     timerInit();
 
+
     // Disable the GPIO power-on default high-impedance mode
     // to activate previously configured port settings
     PM5CTL0 &= ~LOCKLPM5;
@@ -34,22 +35,26 @@ void gpioInit(){
     P1DIR |= BIT0;                          // Set P1.0 to output direction
 
     // @TODO Initialize Button 2.3
-
-    // P2DIR &= ~BIT3;                       // Configure Pin 2.3 to an input
     P2REN |= BIT3;                        // Enable the pull up/down resistor for Pin 2.3
     P2OUT |= BIT3;                        // Pull-up resistor
 
     // Configure Button on P2.3 as input with pullup resistor
     P2IES |= BIT3;                          // P2.3 High --> Low edge
     P2IE |= BIT3;                           // P2.3 interrupt enabled
-    //P2IFG &= ~BIT3;                         // Clear interrupt flag
+
 }
 
 void timerInit(){
     // @TODO Initialize Timer B1 in Continuous Mode using ACLK as the source CLK with Interrupts turned on
-    TB1CTL = TBSSEL_1 | MC_2;                 // ACLK, continuous mode
-    TB1CCTL0 |= CCIE;                         // TBCCR0 interrupt enabled
-    TB1CCR0 = 32768;
+    TB1CTL |= TBCLR;
+    TB1CTL |= TBSSEL_1;
+    TB1CTL |= MC_3;                 // ACLK, continuous mode
+    TB1CCR0 = 16384;
+
+    // Set up Timer Compare IRQ
+    TB1CCTL0 |= CCIE;
+    TB1CCTL0 &= ~CCIFG;
+
 }
 
 
@@ -66,20 +71,22 @@ __interrupt void Port_2(void)
 
     // @TODO When the button is pressed, you can change what the CCR0 Register is for the Timer. You will need to track what speed you should be flashing at.
     if (P2IES & BIT3) {
-        if (TB1CCR0 == 32768) {
-            TB1CCR0 = 16384;
-        }
-        else if (TB1CCR0 == 16384) {
-            TB1CCR0 = 8192;
-        }
-        else {
-            TB1CCR0 = 32768;
-        }
-        P2IES &= ~BIT3;
+            if (TB1CCR0 == 16384)
+                TB1CCR0 = 8192;
+            else if (TB1CCR0 == 8192)
+                TB1CCR0 = 4096;
+            else {
+                TB1CCR0 = 16384;
+            }
+            P2IES &= ~BIT3;
     }
-    else if (!(P2IES & BIT3)) {
-        P2IES |= BIT3;
-    }
+
+    else if (!(P2IES & BIT3))// @TODO Fill in this argument within the If statement to check if the interrupt was triggered off a falling edge.
+       {
+           TB1CCR0 = TB1CCR0;
+           // @TODO Add code to change which edge the interrupt should be looking for next
+           P2IES |= BIT3;
+       }
 }
 
 
@@ -89,6 +96,5 @@ __interrupt void Timer1_B0_ISR(void)
 {
     // @TODO You can toggle the LED Pin in this routine and if adjust your count in CCR0.
     P1OUT ^= BIT0;
+    TB1CCTL0 &= ~CCIFG;
 }
-
-
